@@ -363,6 +363,7 @@ PHP_MINFO_FUNCTION(qrencode)
 {
 	php_info_print_table_start();
 	php_info_print_table_header(2, "qrencode support", "enabled");
+	php_info_print_table_header(2, "qrencode version", PHP_QRENCODE_VERSION);
 	php_info_print_table_end();
 
 	/* Remove comments if you have entries in php.ini
@@ -387,7 +388,7 @@ const zend_function_entry qrencode_functions[] = {
  */
 zend_module_entry qrencode_module_entry = {
 	STANDARD_MODULE_HEADER,
-	"qrencode",
+    PHP_QRENCODE_EXTNAME,
 	qrencode_functions,
 	PHP_MINIT(qrencode),
 	PHP_MSHUTDOWN(qrencode),

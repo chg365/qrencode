@@ -24,6 +24,7 @@
 extern zend_module_entry qrencode_module_entry;
 #define phpext_qrencode_ptr &qrencode_module_entry
 
+#define PHP_QRENCODE_EXTNAME "qrencode"
 #define PHP_QRENCODE_VERSION "0.1.0" /* Replace with version number for your extension */
 
 #ifdef PHP_WIN32
