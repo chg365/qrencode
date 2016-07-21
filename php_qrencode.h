@@ -38,6 +38,12 @@ extern zend_module_entry qrencode_module_entry;
 #include "TSRM.h"
 #endif
 
+PHP_MINIT_FUNCTION(qrencode);
+PHP_MSHUTDOWN_FUNCTION(qrencode);
+PHP_MINFO_FUNCTION(qrencode);
+PHP_FUNCTION(qr_encode);
+PHP_FUNCTION(qr_save);
+
 /*
   	Declare any global variables you may need between the BEGIN
 	and END macros here:
@@ -52,10 +58,15 @@ ZEND_END_MODULE_GLOBALS(qrencode)
    You are encouraged to rename these macros something shorter, see
    examples in any other php module directory.
 */
-#define QRENCODE_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(qrencode, v)
 
-#if defined(ZTS) && defined(COMPILE_DL_QRENCODE)
+#ifdef ZTS
+#define QRENCODE_G(v) TSRMG(qrencode_globals_id, zend_qrencode_globals *, v)
+# ifdef COMPILE_DL_QRENCODE
 ZEND_TSRMLS_CACHE_EXTERN()
+# endif
+#else
+#define QRENCODE_G(v) (qrencode_globals.v)
+/*#define QRENCODE_G(v) ZEND_MODULE_GLOBALS_ACCESSOR(qrencode, v)*/
 #endif
 
 #endif	/* PHP_QRENCODE_H */
