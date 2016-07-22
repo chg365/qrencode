@@ -94,7 +94,21 @@ PHP_FUNCTION(qr_encode)
         RETURN_FALSE;
     }
 
+#if PHP_VERSION_ID > 70000
+    RETURN_RES(zend_register_resource(qr, le_qr));
+#else
     ZEND_REGISTER_RESOURCE (return_value, qr, le_qr);
+#endif
+}
+/* }}} */
+/* qr_version {{{ */
+PHP_FUNCTION(qr_version)
+{
+#if PHP_VERSION_ID > 70000
+    RETURN_STRING(PHP_QRENCODE_VERSION);
+#else
+    RETURN_STRING(PHP_QRENCODE_VERSION, 1);
+#endif
 }
 /* }}} */
 /* {{{ int qr_save (resource link, [string filename, int size, int margin]); */
@@ -135,11 +149,21 @@ PHP_FUNCTION(qr_save)
     {
         php_qrcode *qr = NULL;
 
+
 #if PHP_VERSION_ID > 70000
-        /*zend_fetch_resource2_ex (link, "qr handle", le_qr, NULL);*/
-        zend_fetch_resource2 (Z_RES_P(link), "qr handle", le_qr, NULL);
+        //if you are sure that link is a IS_RESOURCE type, then use :
+        if ((qr = (php_qrcode *)zend_fetch_resource(Z_RES_P(link), LE_QRENCODE, le_qr)) == NULL) {
+            RETURN_FALSE;
+        }
+        
+        /*
+        //otherwise, if you know nothing about link's type, use
+        if ((qr = (php_qrcode *)zend_fetch_resource_ex(link, LE_QRENCODE, le_qr)) == NULL) {
+            RETURN_FALSE;
+        }
+        */
 #else
-        ZEND_FETCH_RESOURCE2 (qr, php_qrcode *, &link, -1, "qr handle", le_qr, NULL);
+        ZEND_FETCH_RESOURCE (qr, php_qrcode *, &link, -1, LE_QRENCODE, le_qr);
 #endif
 
         if (argc >= 2 && fn != NULL && strlen(fn)!=0)
@@ -248,8 +272,14 @@ PHP_FUNCTION(qr_save)
                 php_write (buf, b TSRMLS_CC);
 
             fclose (fp);
+
             VCWD_UNLINK ((const char *)path);
-            efree (path);
+            //VCWD_UNLINK ((const char *)ZSTR_VAL(path));
+            //php_error_docref(NULL, E_NOTICE, "aaaaaaaaaaaa");
+            //zend_string_release(path);
+            //zend_string_free(path);
+            //efree (path);
+            //php_error_docref(NULL, E_NOTICE, "aaaaaaaa");
         }
 
         RETURN_TRUE;
@@ -260,15 +290,9 @@ PHP_FUNCTION(qr_save)
 /* }}} */
 #if PHP_VERSION_ID > 70000
 static void qr_dtor(zend_resource *rsrc TSRMLS_DC)
-{
-    php_qrcode *qr = (php_qrcode *)rsrc->ptr;
-
-    if (qr->c)
-        QRcode_free (qr->c);
-    efree (qr);
-}
 #else
 static void qr_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+#endif
 {
     php_qrcode *qr = (php_qrcode *)rsrc->ptr;
 
@@ -277,7 +301,6 @@ static void qr_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC)
     efree (qr);
 }
 
-#endif
 
 
 
@@ -306,7 +329,7 @@ PHP_MINIT_FUNCTION(qrencode)
 	/* If you have INI entries, uncomment these lines
 	REGISTER_INI_ENTRIES();
     */
-    le_qr = zend_register_list_destructors_ex(qr_dtor, NULL, "qr", module_number);
+    le_qr = zend_register_list_destructors_ex(qr_dtor, NULL, LE_QRENCODE, module_number);
 
     REGISTER_LONG_CONSTANT ("QR_MODE_NUL", QR_MODE_NUL, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT ("QR_MODE_NUM", QR_MODE_NUM, CONST_CS | CONST_PERSISTENT);
@@ -377,7 +400,8 @@ PHP_MINFO_FUNCTION(qrencode)
  * Every user visible function must have an entry in qrencode_functions[].
  */
 const zend_function_entry qrencode_functions[] = {
-	PHP_FE(qr_encode,	NULL)
+	PHP_FE(qr_encode, NULL)
+	PHP_FE(qr_version, NULL)
     PHP_FE(qr_save, NULL)
     /*{NULL, NULL, NULL}*/
 	PHP_FE_END	/* Must be the last line in qrencode_functions[] */

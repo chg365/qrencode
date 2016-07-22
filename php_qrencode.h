@@ -26,6 +26,7 @@ extern zend_module_entry qrencode_module_entry;
 
 #define PHP_QRENCODE_EXTNAME "qrencode"
 #define PHP_QRENCODE_VERSION "0.1.0" /* Replace with version number for your extension */
+#define LE_QRENCODE "qrencode handle"
 
 #ifdef PHP_WIN32
 #    define PHP_QRENCODE_API __declspec(dllexport)
@@ -43,6 +44,7 @@ PHP_MINIT_FUNCTION(qrencode);
 PHP_MSHUTDOWN_FUNCTION(qrencode);
 PHP_MINFO_FUNCTION(qrencode);
 PHP_FUNCTION(qr_encode);
+PHP_FUNCTION(qr_version);
 PHP_FUNCTION(qr_save);
 
 /*
