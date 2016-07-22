@@ -257,7 +257,7 @@ PHP_FUNCTION(qr_save)
 
         efree (row);
 
-        if (argc > 2 && fn != NULL && strlen(fn)!=0)
+        if (argc >= 2 && fn != NULL && strlen(fn)!=0)
         {
             fflush (fp);
             fclose (fp);
@@ -275,11 +275,9 @@ PHP_FUNCTION(qr_save)
 
             VCWD_UNLINK ((const char *)path);
             //VCWD_UNLINK ((const char *)ZSTR_VAL(path));
-            //php_error_docref(NULL, E_NOTICE, "aaaaaaaaaaaa");
             //zend_string_release(path);
             //zend_string_free(path);
-            //efree (path);
-            //php_error_docref(NULL, E_NOTICE, "aaaaaaaa");
+            efree (path);
         }
 
         RETURN_TRUE;
