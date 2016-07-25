@@ -4,7 +4,7 @@ qrencode
 A php qrencode extension
 
 
-这个程序是在https://github.com/dreamsxin/qrencodeforphp的基础上修改而来。
+这个程序是在 https://github.com/dreamsxin/qrencodeforphp 的基础上修改而来。
 原因是在php7上编译不过去。
 
 在php7.0.7、php5.4.20上测试能编译过去
