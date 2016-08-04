@@ -151,13 +151,13 @@ PHP_FUNCTION(qr_save)
 
 
 #if PHP_VERSION_ID > 70000
-        //if you are sure that link is a IS_RESOURCE type, then use :
+        /* if you are sure that link is a IS_RESOURCE type, then use : */
         if ((qr = (php_qrcode *)zend_fetch_resource(Z_RES_P(link), LE_QRENCODE, le_qr)) == NULL) {
             RETURN_FALSE;
         }
         
         /*
-        //otherwise, if you know nothing about link's type, use
+        /* otherwise, if you know nothing about link's type, use * /
         if ((qr = (php_qrcode *)zend_fetch_resource_ex(link, LE_QRENCODE, le_qr)) == NULL) {
             RETURN_FALSE;
         }
@@ -274,9 +274,9 @@ PHP_FUNCTION(qr_save)
             fclose (fp);
 
             VCWD_UNLINK ((const char *)path);
-            //VCWD_UNLINK ((const char *)ZSTR_VAL(path));
-            //zend_string_release(path);
-            //zend_string_free(path);
+            /* VCWD_UNLINK ((const char *)ZSTR_VAL(path)); */
+            /* zend_string_release(path); */
+            /* zend_string_free(path); */
             efree (path);
         }
 
