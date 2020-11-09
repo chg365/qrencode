@@ -1,6 +1,6 @@
 #!/usr/local/chg/base/opt/php/bin/php
 <?php
-$url = 'https://github.com/chg365/qrencode/archive/0.1.0.tar.gz';
+$url = 'https://github.com/chg365/qrencode/archive/0.2.0.tar.gz';
 $qr = qr_encode ($url);
 if (is_resource ($qr))
 {
