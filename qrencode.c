@@ -125,7 +125,8 @@ PHP_FUNCTION(qr_save)
     zval *link = NULL;
     long size = 3, margin = 4;
     const char *fn = NULL;
-    int fn_len, argc;
+    int argc;
+    size_t fn_len;
     FILE *fp = NULL;
     png_structp png_ptr;
     png_infop info_ptr;
@@ -273,11 +274,14 @@ PHP_FUNCTION(qr_save)
 
             fclose (fp);
 
-            VCWD_UNLINK ((const char *)path);
-            /* VCWD_UNLINK ((const char *)ZSTR_VAL(path)); */
-            /* zend_string_release(path); */
+#if PHP_VERSION_ID > 70000
+            VCWD_UNLINK((const char *)ZSTR_VAL(path));
+#else
+            VCWD_UNLINK((const char *)path);
+#endif
+            zend_string_release(path);
             /* zend_string_free(path); */
-            efree (path);
+            /* efree (path); */
         }
 
         RETURN_TRUE;
