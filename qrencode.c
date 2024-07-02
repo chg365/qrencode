@@ -44,9 +44,9 @@ typedef struct
 
 /* php 7 */
 #if PHP_VERSION_ID > 70000
-static void qr_dtor(zend_resource *rsrc TSRMLS_DC);
+static void qr_dtor(zend_resource *rsrc);
 #else
-static void qr_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC);
+static void qr_dtor(zend_rsrc_list_entry *rsrc);
 #endif
 
 
@@ -79,7 +79,7 @@ PHP_FUNCTION(qr_encode)
     const char *text;
     int text_len;
 
-    if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "s|llll", &text, &text_len, &version, &level, &mode, &casesensitive) == FAILURE)
+    if (zend_parse_parameters( ZEND_NUM_ARGS(), "s|llll", &text, &text_len, &version, &level, &mode, &casesensitive) == FAILURE)
         RETURN_FALSE;
 
     qr = (php_qrcode *) emalloc (sizeof (php_qrcode));
@@ -143,7 +143,7 @@ PHP_FUNCTION(qr_save)
 
     argc = ZEND_NUM_ARGS();
 
-    if (zend_parse_parameters( ZEND_NUM_ARGS() TSRMLS_CC, "r|sll", &link, &fn, &fn_len, &size, &margin) == FAILURE )
+    if (zend_parse_parameters( ZEND_NUM_ARGS(), "r|sll", &link, &fn, &fn_len, &size, &margin) == FAILURE )
         RETURN_FALSE;
 
     if (link)
@@ -172,16 +172,16 @@ PHP_FUNCTION(qr_save)
             fp = VCWD_FOPEN (fn, "wb");
             if (!fp)
             {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open '%s' for writing.", fn);
+                php_error_docref(NULL, E_WARNING, "Unable to open '%s' for writing.", fn);
                 RETURN_FALSE;
             }
         }
         else
         {
-            fp = php_open_temporary_file (NULL, NULL, &path TSRMLS_CC);
+            fp = php_open_temporary_file (NULL, NULL, &path);
             if (!fp)
             {
-                php_error_docref(NULL TSRMLS_CC, E_WARNING, "Unable to open temporary file for writing.");
+                php_error_docref(NULL, E_WARNING, "Unable to open temporary file for writing.");
                 RETURN_FALSE;
             }
         }
@@ -193,7 +193,7 @@ PHP_FUNCTION(qr_save)
         if(png_ptr == NULL)
         {
             fclose(fp);
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "Failed to initialize PNG writer.");
+            php_error_docref(NULL, E_WARNING, "Failed to initialize PNG writer.");
             RETURN_FALSE;
         }
 
@@ -201,7 +201,7 @@ PHP_FUNCTION(qr_save)
         if(info_ptr == NULL)
         {
             fclose(fp);
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "Failed to initialize PNG write.");
+            php_error_docref(NULL, E_WARNING, "Failed to initialize PNG write.");
             RETURN_FALSE;
         }
 
@@ -209,7 +209,7 @@ PHP_FUNCTION(qr_save)
         if(setjmp(png_jmpbuf(png_ptr))) {
             png_destroy_write_struct(&png_ptr, &info_ptr);
             fclose(fp);
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "Failed to write PNG image.");
+            php_error_docref(NULL, E_WARNING, "Failed to write PNG image.");
             RETURN_FALSE;
         }
 
@@ -270,7 +270,7 @@ PHP_FUNCTION(qr_save)
             ap_bsetflag(php3_rqst->connection->client, B_EBCDIC2ASCII, 0);
 #endif
             while ((b = fread (buf, 1, sizeof(buf), fp)) > 0)
-                php_write (buf, b TSRMLS_CC);
+                php_write (buf, b);
 
             fclose (fp);
 
@@ -291,9 +291,9 @@ PHP_FUNCTION(qr_save)
 }
 /* }}} */
 #if PHP_VERSION_ID > 70000
-static void qr_dtor(zend_resource *rsrc TSRMLS_DC)
+static void qr_dtor(zend_resource *rsrc)
 #else
-static void qr_dtor(zend_rsrc_list_entry *rsrc TSRMLS_DC)
+static void qr_dtor(zend_rsrc_list_entry *rsrc)
 #endif
 {
     php_qrcode *qr = (php_qrcode *)rsrc->ptr;
