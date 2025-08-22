@@ -1,6 +1,6 @@
 /*
   +----------------------------------------------------------------------+
-  | PHP Version 7                                                        |
+  | PHP Version 8                                                        |
   +----------------------------------------------------------------------+
   | Copyright (c) 1997-2016 The PHP Group                                |
   +----------------------------------------------------------------------+
@@ -37,20 +37,54 @@ ZEND_DECLARE_MODULE_GLOBALS(qrencode)
 /* True global resources - no need for thread safety here */
 static int le_qr;
 
-typedef struct
+// 统一 php_qrcode 结构体定义
+#if PHP_VERSION_ID >= 80000
+struct _php_qrcode {
+    QRcode *c;
+    zend_object std;
+};
+
+// 辅助函数：从对象获取 php_qrcode
+static inline php_qrcode *php_qrcode_from_obj(zend_object *obj)
 {
+    return (php_qrcode *)((char *)(obj) - XtOffsetOf(struct _php_qrcode, std));
+}
+#else
+typedef struct {
     QRcode *c;
 } php_qrcode;
-
-/* php 7 */
-#if PHP_VERSION_ID > 70000
-static void qr_dtor(zend_resource *rsrc);
-#else
-static void qr_dtor(zend_rsrc_list_entry *rsrc);
 #endif
 
+/* PHP 版本兼容性处理 */
+#if PHP_VERSION_ID >= 80000
+// PHP 8.x 使用对象而不是资源
+#define QR_RESOURCE_NAME "QR Code"
+zend_class_entry *qrencode_class_entry;
+static zend_object_handlers qrencode_object_handlers;
+#endif
 
+// 添加 arginfo 定义
+ZEND_BEGIN_ARG_INFO_EX(arginfo_qr_encode, 0, 0, 1)
+    ZEND_ARG_INFO(0, text)
+    ZEND_ARG_INFO(0, version)
+    ZEND_ARG_INFO(0, level)
+    ZEND_ARG_INFO(0, mode)
+    ZEND_ARG_INFO(0, casesensitive)
+ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_qr_version, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
+ZEND_BEGIN_ARG_INFO_EX(arginfo_qr_save, 0, 0, 1)
+#if PHP_VERSION_ID >= 80000
+    ZEND_ARG_OBJ_INFO(0, link, QRCode, 0)
+#else
+    ZEND_ARG_INFO(0, link)
+#endif
+    ZEND_ARG_INFO(0, filename)
+    ZEND_ARG_INFO(0, size)
+    ZEND_ARG_INFO(0, margin)
+ZEND_END_ARG_INFO()
 
 /* {{{ PHP_INI
  */
@@ -61,6 +95,31 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 */
 /* }}} */
+
+#if PHP_VERSION_ID >= 80000
+// PHP 8.x 对象处理函数
+static void qrencode_free_object(zend_object *object)
+{
+    php_qrcode *qr = php_qrcode_from_obj(object);
+    
+    if (qr->c)
+        QRcode_free(qr->c);
+    
+    zend_object_std_dtor(&qr->std);
+}
+
+static zend_object *qrencode_create_object(zend_class_entry *class_type)
+{
+    php_qrcode *qr = (php_qrcode *)ecalloc(1, sizeof(php_qrcode));
+    
+    zend_object_std_init(&qr->std, class_type);
+    object_properties_init(&qr->std, class_type);
+    
+    qr->std.handlers = &qrencode_object_handlers;
+    
+    return &qr->std;
+}
+#endif
 
 /* {{{ resource qr_encode (string text, [int version, int level, int mode, int casesensitive]); */
 /**
@@ -77,7 +136,7 @@ PHP_FUNCTION(qr_encode)
     php_qrcode *qr = NULL;
     long version = 1, level = QR_ECLEVEL_L, mode = QR_MODE_8, casesensitive = 1;
     const char *text;
-    int text_len;
+    size_t text_len;
 
     if (zend_parse_parameters( ZEND_NUM_ARGS(), "s|llll", &text, &text_len, &version, &level, &mode, &casesensitive) == FAILURE)
         RETURN_FALSE;
@@ -94,20 +153,31 @@ PHP_FUNCTION(qr_encode)
         RETURN_FALSE;
     }
 
-#if PHP_VERSION_ID > 70000
-    RETURN_RES(zend_register_resource(qr, le_qr));
+#if PHP_VERSION_ID >= 80000
+    // PHP 8.x 使用对象
+    zend_object *obj = qrencode_create_object(qrencode_class_entry);
+    php_qrcode *obj_qr = php_qrcode_from_obj(obj);
+    obj_qr->c = qr->c;
+    efree(qr); // 释放临时分配的内存
+    
+    RETURN_OBJ(obj);
 #else
-    ZEND_REGISTER_RESOURCE (return_value, qr, le_qr);
+    // PHP 7.x 及以下使用资源
+    #if PHP_VERSION_ID >= 70000
+        RETURN_RES(zend_register_resource(qr, le_qr));
+    #else
+        ZEND_REGISTER_RESOURCE (return_value, qr, le_qr);
+    #endif
 #endif
 }
 /* }}} */
 /* qr_version {{{ */
 PHP_FUNCTION(qr_version)
 {
-#if PHP_VERSION_ID > 70000
+#if PHP_VERSION_ID >= 70000
     RETURN_STRING(PHP_QRENCODE_VERSION);
 #else
-    RETURN_STRING(PHP_QRENCODE_VERSION, 1);
+	RETURN_STRING(PHP_QRENCODE_VERSION, 1);
 #endif
 }
 /* }}} */
@@ -133,38 +203,40 @@ PHP_FUNCTION(qr_save)
     unsigned char *row, *p, *q;
     int x, y, xx, yy, bit;
     int realwidth;
-#if PHP_VERSION_ID > 70000
+#if PHP_VERSION_ID >= 70000
     zend_string *path;
 #else
-    char *path;
+	char *path;
 #endif
     int b;
     char buf[4096];
 
     argc = ZEND_NUM_ARGS();
 
-    if (zend_parse_parameters( ZEND_NUM_ARGS(), "r|sll", &link, &fn, &fn_len, &size, &margin) == FAILURE )
+    // 修改参数解析以支持 PHP 8.x 的对象
+#if PHP_VERSION_ID >= 80000
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "O|sll", &link, qrencode_class_entry, &fn, &fn_len, &size, &margin) == FAILURE)
+#else
+    if (zend_parse_parameters(ZEND_NUM_ARGS(), "r|sll", &link, &fn, &fn_len, &size, &margin) == FAILURE)
+#endif
         RETURN_FALSE;
 
     if (link)
     {
         php_qrcode *qr = NULL;
 
-
-#if PHP_VERSION_ID > 70000
-        /* if you are sure that link is a IS_RESOURCE type, then use : */
-        if ((qr = (php_qrcode *)zend_fetch_resource(Z_RES_P(link), LE_QRENCODE, le_qr)) == NULL) {
-            RETURN_FALSE;
-        }
-        
-        /*
-        /* otherwise, if you know nothing about link's type, use * /
-        if ((qr = (php_qrcode *)zend_fetch_resource_ex(link, LE_QRENCODE, le_qr)) == NULL) {
-            RETURN_FALSE;
-        }
-        */
+#if PHP_VERSION_ID >= 80000
+        // PHP 8.x 对象处理
+        qr = php_qrcode_from_obj(Z_OBJ_P(link));
 #else
-        ZEND_FETCH_RESOURCE (qr, php_qrcode *, &link, -1, LE_QRENCODE, le_qr);
+        // PHP 7.x 及以下资源处理
+        #if PHP_VERSION_ID >= 70000
+            if ((qr = (php_qrcode *)zend_fetch_resource(Z_RES_P(link), LE_QRENCODE, le_qr)) == NULL) {
+                RETURN_FALSE;
+            }
+        #else
+            ZEND_FETCH_RESOURCE (qr, php_qrcode *, &link, -1, LE_QRENCODE, le_qr);
+        #endif
 #endif
 
         if (argc >= 2 && fn != NULL && strlen(fn)!=0)
@@ -274,14 +346,17 @@ PHP_FUNCTION(qr_save)
 
             fclose (fp);
 
-#if PHP_VERSION_ID > 70000
+#if PHP_VERSION_ID >= 80000
             VCWD_UNLINK((const char *)ZSTR_VAL(path));
-#else
-            VCWD_UNLINK((const char *)path);
-#endif
             zend_string_release(path);
-            /* zend_string_free(path); */
-            /* efree (path); */
+#else
+            #if PHP_VERSION_ID >= 70000
+                VCWD_UNLINK((const char *)ZSTR_VAL(path));
+                zend_string_release(path);
+            #else
+                VCWD_UNLINK((const char *)path);
+            #endif
+#endif
         }
 
         RETURN_TRUE;
@@ -290,7 +365,12 @@ PHP_FUNCTION(qr_save)
         RETURN_FALSE;
 }
 /* }}} */
-#if PHP_VERSION_ID > 70000
+
+#if PHP_VERSION_ID >= 80000
+// PHP 8.x 不需要资源析构函数
+#else
+// PHP 7.x 及以下需要资源析构函数
+#if PHP_VERSION_ID >= 70000
 static void qr_dtor(zend_resource *rsrc)
 #else
 static void qr_dtor(zend_rsrc_list_entry *rsrc)
@@ -302,9 +382,7 @@ static void qr_dtor(zend_rsrc_list_entry *rsrc)
         QRcode_free (qr->c);
     efree (qr);
 }
-
-
-
+#endif
 
 /* The previous line is meant for vim and emacs, so it can correctly fold and
    unfold functions in source code. See the corresponding marks just before
@@ -318,8 +396,8 @@ static void qr_dtor(zend_rsrc_list_entry *rsrc)
 /* Uncomment this function if you have INI entries
 static void php_qrencode_init_globals(zend_qrencode_globals *qrencode_globals)
 {
-	qrencode_globals->global_value = 0;
-	qrencode_globals->global_string = NULL;
+    qrencode_globals->global_value = 0;
+    qrencode_globals->global_string = NULL;
 }
 */
 /* }}} */
@@ -328,10 +406,25 @@ static void php_qrencode_init_globals(zend_qrencode_globals *qrencode_globals)
  */
 PHP_MINIT_FUNCTION(qrencode)
 {
-	/* If you have INI entries, uncomment these lines
-	REGISTER_INI_ENTRIES();
+    /* If you have INI entries, uncomment these lines
+    REGISTER_INI_ENTRIES();
     */
+    
+#if PHP_VERSION_ID >= 80000
+    // PHP 8.x 注册对象类
+    zend_class_entry ce;
+    
+    INIT_CLASS_ENTRY(ce, "QRCode", NULL);
+    qrencode_class_entry = zend_register_internal_class(&ce);
+    qrencode_class_entry->create_object = qrencode_create_object;
+    
+    memcpy(&qrencode_object_handlers, zend_get_std_object_handlers(), sizeof(zend_object_handlers));
+    qrencode_object_handlers.offset = XtOffsetOf(struct _php_qrcode, std);
+    qrencode_object_handlers.free_obj = qrencode_free_object;
+#else
+    // PHP 7.x 及以下注册资源
     le_qr = zend_register_list_destructors_ex(qr_dtor, NULL, LE_QRENCODE, module_number);
+#endif
 
     REGISTER_LONG_CONSTANT ("QR_MODE_NUL", QR_MODE_NUL, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT ("QR_MODE_NUM", QR_MODE_NUM, CONST_CS | CONST_PERSISTENT);
@@ -342,7 +435,7 @@ PHP_MINIT_FUNCTION(qrencode)
     REGISTER_LONG_CONSTANT ("QR_ECLEVEL_M", QR_ECLEVEL_M, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT ("QR_ECLEVEL_Q", QR_ECLEVEL_Q, CONST_CS | CONST_PERSISTENT);
     REGISTER_LONG_CONSTANT ("QR_ECLEVEL_H", QR_ECLEVEL_H, CONST_CS | CONST_PERSISTENT);
-	return SUCCESS;
+    return SUCCESS;
 }
 /* }}} */
 
@@ -350,10 +443,10 @@ PHP_MINIT_FUNCTION(qrencode)
  */
 PHP_MSHUTDOWN_FUNCTION(qrencode)
 {
-	/* uncomment this line if you have INI entries
-	UNREGISTER_INI_ENTRIES();
-	*/
-	return SUCCESS;
+    /* uncomment this line if you have INI entries
+    UNREGISTER_INI_ENTRIES();
+    */
+    return SUCCESS;
 }
 /* }}} */
 
@@ -364,9 +457,9 @@ PHP_MSHUTDOWN_FUNCTION(qrencode)
 PHP_RINIT_FUNCTION(qrencode)
 {
 #if defined(COMPILE_DL_QRENCODE) && defined(ZTS)
-	ZEND_TSRMLS_CACHE_UPDATE();
+    ZEND_TSRMLS_CACHE_UPDATE();
 #endif
-	return SUCCESS;
+    return SUCCESS;
 }
 */
 /* }}} */
@@ -377,7 +470,7 @@ PHP_RINIT_FUNCTION(qrencode)
 /*
 PHP_RSHUTDOWN_FUNCTION(qrencode)
 {
-	return SUCCESS;
+    return SUCCESS;
 }
 */
 /* }}} */
@@ -386,14 +479,14 @@ PHP_RSHUTDOWN_FUNCTION(qrencode)
  */
 PHP_MINFO_FUNCTION(qrencode)
 {
-	php_info_print_table_start();
-	php_info_print_table_header(2, "qrencode support", "enabled");
-	php_info_print_table_header(2, "qrencode version", PHP_QRENCODE_VERSION);
-	php_info_print_table_end();
+    php_info_print_table_start();
+    php_info_print_table_header(2, "qrencode support", "enabled");
+    php_info_print_table_header(2, "qrencode version", PHP_QRENCODE_VERSION);
+    php_info_print_table_end();
 
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
+    /* Remove comments if you have entries in php.ini
+    DISPLAY_INI_ENTRIES();
+    */
 }
 /* }}} */
 
@@ -402,27 +495,27 @@ PHP_MINFO_FUNCTION(qrencode)
  * Every user visible function must have an entry in qrencode_functions[].
  */
 const zend_function_entry qrencode_functions[] = {
-	PHP_FE(qr_encode, NULL)
-	PHP_FE(qr_version, NULL)
-    PHP_FE(qr_save, NULL)
+    PHP_FE(qr_encode, arginfo_qr_encode)
+    PHP_FE(qr_version, arginfo_qr_version)
+    PHP_FE(qr_save, arginfo_qr_save)
     /*{NULL, NULL, NULL}*/
-	PHP_FE_END	/* Must be the last line in qrencode_functions[] */
+    PHP_FE_END  /* Must be the last line in qrencode_functions[] */
 };
 /* }}} */
 
 /* {{{ qrencode_module_entry
  */
 zend_module_entry qrencode_module_entry = {
-	STANDARD_MODULE_HEADER,
+    STANDARD_MODULE_HEADER,
     PHP_QRENCODE_EXTNAME,
-	qrencode_functions,
-	PHP_MINIT(qrencode),
-	PHP_MSHUTDOWN(qrencode),
+    qrencode_functions,
+    PHP_MINIT(qrencode),
+    PHP_MSHUTDOWN(qrencode),
     NULL,
     NULL,
-	PHP_MINFO(qrencode),
-	PHP_QRENCODE_VERSION,
-	STANDARD_MODULE_PROPERTIES
+    PHP_MINFO(qrencode),
+    PHP_QRENCODE_VERSION,
+    STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
 

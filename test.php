@@ -2,8 +2,7 @@
 <?php
 $url = 'https://github.com/chg365/qrencode/archive/0.3.0.tar.gz';
 $qr = qr_encode ($url);
-if (is_resource ($qr))
-{
+if (is_resource($qr) || is_object($qr)) {
     $flag = qr_save ($qr, '1.png');
     //header ("Content-type: image/PNG");
     //$flag = qr_save ($qr);
